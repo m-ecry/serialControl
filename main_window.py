@@ -55,7 +55,8 @@ class mainWindow(object):
         self.width = 100
         self.right_border = self.width
         self.height = 100
-        self.graph = sg.Graph((640,512), (-4,-4), (self.width,self.height), background_color='white', key='display')
+        self.graph = sg.Graph((640,512), (-4,-4), (self.width,self.height), background_color=None, key='display')
+        self.graph2 = sg.Graph((640,512), (-4,-4), (self.width,self.height), background_color=None, key='display2')
 
         # heigth in rows, witdth in pixels
         size_progressBar = (50,32)
@@ -66,20 +67,16 @@ class mainWindow(object):
                    self.graph,
                    sg.Button(button_text=">", size=(1,30), key='mv_right') ], ]
 
-        col2 = [ [ sg.Text(' 0.00', key='_sensor', size=(5,1), pad=padding), ],
-                 [  sg.ProgressBar(100, orientation='v', size=size_progressBar, key='sensor', pad=padding), ],
-                 [ sg.Text("Cur", size=(4,1), pad=padding) ], ]
+        col2 = [ [ sg.Text("Cur", size=(4,1), pad=padding), sg.Text(' 0.00', key='_sensor', size=(5,1), pad=padding), ],
+                 [ sg.Text("Dest", size=(4,1), pad=padding), sg.Text('0.00', key='_output', size=(5,1), pad=padding) ],
+                   ]
 
-        col3 = [ [ sg.Text('0.00', key='_output', size=(5,1), pad=padding) ],
-                 [ sg.ProgressBar(100, orientation='v', size=size_progressBar, key='output', pad=padding), ],
-                 [ sg.Text("Dest", size=(4,1), pad=padding) ], ]
-
-        col4 = [ [ sg.Text("Set", size=(5,1), justification='right'), ],
+        col3 = [ [ sg.Text("Set", size=(5,1), justification='right'), ],
                  [ sg.Slider(range=(0,100), default_value=0, orientation='v', size=(24,20), key='temp', pad=padding), ], ]
 
         temperature_frame_layout = [ [ sg.Column(col2, pad=colpadding),
                                        sg.Column(col3, pad=colpadding),
-                                       sg.Column(col4, pad=colpadding), ], ]
+                                                                            ], ]
 
         layout = [  [ sg.Menu(self.menu_def, key='menu') ],
                     [
@@ -222,9 +219,22 @@ class mainWindow(object):
                 self.storeValues(self.timeX[self.ndx], self.sensValue[self.ndx])
 
                 self.window.Element('_sensor').Update("%.2f"%tmp)
-                self.window.Element('sensor').UpdateBar(int (tmp))
+                values['output'] = int(values['output'])
                 self.window.Element('_output').Update(values['output'])
-                self.window.Element('output').UpdateBar(int (values ['output']))
+                ########################################################################
+
+                if ( not hasattr(self,'lastReceivedValues') ):
+                    self.lastReceivedValues = values
+
+                if ( self.lastReceivedValues['output'] != values['output'] ):
+                    if ( hasattr(self, 'line') ):
+                        self.graph.DeleteFigure(self.line)
+
+                    self.line = self.graph.DrawLine( (0, values['output']),
+                                         (self.right_drawed_border, values['output']),
+                                         color='red', width=1)
+
+                self.lastReceivedValues = values
                 # In case, a change was missed, repeat report current value
                 if ( self.oldValues['temp'] != int(values['output']) ):
                     self.serialComm.writeToPort(self.oldValues['temp']);
