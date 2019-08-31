@@ -14,20 +14,13 @@ import signal
 import shutil
 import os
 currentMS = int(round(time.time() * 1000))
-
+from main_display import mainDisplay as md
 
 class mainWindow(object):
     """ Main Window for the regulator """
 
     timeX = [0]
     sensValue = [0]
-    ndx = 0
-    delta = 0
-    moveThreshold  = 2
-    right_border   = 0
-    right_drawed_border = 0
-    canvasAutoMove = 1
-    range = 496;
 
     def __init__(self, port, baudrate):
         self.filename = ".tmp.csv"
@@ -52,11 +45,7 @@ class mainWindow(object):
 
 
     def setup(self):
-        self.width = 100
-        self.right_border = self.width
-        self.height = 100
-        self.graph = sg.Graph((640,512), (-4,-4), (self.width,self.height), background_color=None, key='display')
-        self.graph2 = sg.Graph((640,512), (-4,-4), (self.width,self.height), background_color=None, key='display2')
+        self.mDisplay = md(100,100)
 
         # heigth in rows, witdth in pixels
         size_progressBar = (50,32)
@@ -64,7 +53,7 @@ class mainWindow(object):
         colpadding = ((0,0),8)
 
         col1 = [ [ sg.Button(button_text="<", size=(1,30), key='mv_left'),
-                   self.graph,
+                   self.mDisplay.graph,
                    sg.Button(button_text=">", size=(1,30), key='mv_right') ], ]
 
         col2 = [ [ sg.Text("Cur", size=(4,1), pad=padding), sg.Text(' 0.00', key='_sensor', size=(5,1), pad=padding), ],
@@ -87,7 +76,7 @@ class mainWindow(object):
         event, self.oldValues = self.window.Read(timeout=1)
         print(self.oldValues)
 
-        self.drawGrid();
+        self.mDisplay.drawGrid();
         self.startTime = int(round(time.time() * 1000));
 
     def startSerial(self, serialPort, baudrate):
@@ -136,87 +125,24 @@ class mainWindow(object):
         except Exception as e:
             self.showWarning("Error while opening file", str(e));
 
-    def drawGrid(self):
-        startX = self.right_drawed_border
-        widthTimesX = 2
-        if ( 0 == startX ):
-            self.graph.DrawText("0", (-1.5,-1.5));
-
-        self.right_drawed_border += widthTimesX*self.width
-
-        self.graph.DrawLine((startX-self.delta,0), (self.right_drawed_border-self.delta,0), color='grey', width='3');
-
-        widthStep = int(self.width/10)
-        heightStep = int(self.height/10)
-        for i in range(startX+widthStep,self.right_drawed_border+1, widthStep):
-            self.graph.DrawLine((i-self.delta,0), (i-self.delta,self.height), color='grey', width='1');
-            self.graph.DrawText(str(i)+'s', (i-self.delta,-1.5));
-        for i in range(heightStep,self.height+1, heightStep):
-            self.graph.DrawLine((startX-self.delta,i), (self.right_drawed_border-self.delta,i), color='grey', width='1');
-            for j in range(widthTimesX+1):
-                self.graph.DrawLine((startX-self.delta+j*self.width,0), (startX-self.delta+j*self.width,self.height), color='grey', width='3');
-                self.graph.DrawText(str(i), (startX-self.delta-2+j*self.width,i-1.5));
-                if ( 100 == i ):
-                    self.graph.DrawText("T / °C", (startX-self.delta+5+j*self.width,i-1.5));
-
-
-    def drawFullCanvas(self):
-        self.graph.Erase()
-        self.drawGrid()
-        #self.graph.Move((self.timeX[self.ndx] - self.timeX[self.ndx+1]), 0)
-        for i in range(self.range):
-            self.graph.DrawLine( (self.timeX[self.ndx-i]-self.timeX[self.ndx-self.range], self.sensValue[self.ndx-i]),
-                                 (self.timeX[self.ndx+1-i]-self.timeX[self.ndx-self.range], self.sensValue[self.ndx+1-i]),
-                                  color='blue', width=2)
-
-    def mvCanvas(self, left_direction):
-        threshold = 20
-        if ( left_direction ):
-            if ( 0 <= (self.delta-threshold) ):
-                self.delta -= threshold
-                self.graph.Move(threshold, 0)
-                self.right_border -= threshold
-        else:
-            if ( self.right_drawed_border >= (self.right_border + threshold) ):
-                self.delta += threshold
-                self.graph.Move(-threshold, 0)
-                self.right_border += threshold
-
-        # If moved outside of the graph, deactivate automovement
-        if ( self.right_border < self.timeX[-1] ):
-            self.canvasAutoMove = 0;
-        else:
-            self.canvasAutoMove = 1;
-
-
     def evaluateReceivedValues(self, values):
         if ( 0 != values ):
             #print(values);
             try:
                 currentMS = int(round(time.time() * 1000))
-                self.timeX.append(float((currentMS - self.startTime)/1000))
+                self.timeX.append(float((currentMS - self.startTime)/100))
 
                 tmp = float(values['sensor'] * 100 / 4096.0); # 12-bit adc-values
                 #print (tmp)
                 self.sensValue.append( tmp )
 
-                if ( (self.right_border < self.timeX[-1]) and self.canvasAutoMove ):
-                    #self.delta = float(self.right_border - self.timeX[-1])
-                    #self.graph.Move(self.delta, 0);
-                    self.delta += self.moveThreshold
-                    self.graph.Move(-self.moveThreshold,0)
-                    self.right_border += self.moveThreshold#self.timeX[-1]
-                    #self.drawFullCanvas();
+                self.mDisplay.fitCanvas(self.timeX[-1])
 
-                if ( (self.right_drawed_border - self.width) < self.timeX[-1] ):
-                    self.drawGrid();
-
-                self.graph.DrawLine( (self.timeX[self.ndx]-self.delta, self.sensValue[self.ndx]),
-                                     (self.timeX[-1]-self.delta, self.sensValue[-1]),
+                self.mDisplay.graph.DrawLine( (self.timeX[-2]-self.mDisplay.delta, self.sensValue[-2]),
+                                     (self.timeX[-1]-self.mDisplay.delta, self.sensValue[-1]),
                                       color='blue', width=2)
 
-                self.ndx += 1
-                self.storeValues(self.timeX[self.ndx], self.sensValue[self.ndx])
+                self.storeValues(self.timeX[-1], self.sensValue[-1])
 
                 self.window.Element('_sensor').Update("%.2f"%tmp)
                 values['output'] = int(values['output'])
@@ -282,9 +208,9 @@ class mainWindow(object):
                     self.showWarning('Invalid temperature given!', str(e));
 
         elif ( event == 'mv_right' ):
-            self.mvCanvas(0);
+            self.mDisplay.mvCanvas(0);
         elif ( event == 'mv_left' ):
-            self.mvCanvas(1);
+            self.mDisplay.mvCanvas(1);
         elif ( event == 'Change Output File To...'):
             newFile = sg.PopupGetFile("Choose file to store the data into.", title='New savefile', save_as=True, file_types=(('csv file', '*.csv'),), no_window=True)
             if ( newFile != None ):
