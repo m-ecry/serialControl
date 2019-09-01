@@ -46,7 +46,7 @@ class mainWindow(object):
 
 
     def setup(self):
-        self.mDisplay = md(100,100, self.timeX)
+        self.mDisplay = md(640,480, self.timeX)
 
         # heigth in rows, witdth in pixels
         size_progressBar = (50,32)
@@ -80,7 +80,8 @@ class mainWindow(object):
         event, self.oldValues = self.window.Read(timeout=1)
         print(self.oldValues)
 
-        self.mDisplay.drawGrid();
+        self.mDisplay.AddDataStream(self.timeX, self.sensValue, (0,100), 'temperature', label='T in °C');
+
         self.startTime = int(round(time.time() * 1000));
 
     def startSerial(self, serialPort, baudrate):
@@ -137,11 +138,12 @@ class mainWindow(object):
 
                 currentMS = int(round(time.time() * 1000))
                 self.timeX.append(float((currentMS - self.startTime)/100))
-                self.mDisplay.fitCanvas(self.timeX[-1])
 
-                self.mDisplay.DrawLine( (self.timeX[-2]-self.mDisplay.delta, self.sensValue[-2]),
-                                        (self.timeX[-1]-self.mDisplay.delta, self.sensValue[-1]),
-                                         color='blue', width=2, key='temperature')
+                #self.mDisplay.DrawLine( (self.timeX[-2]-self.mDisplay.delta, self.sensValue[-2]),
+                                        #(self.timeX[-1]-self.mDisplay.delta, self.sensValue[-1]),
+                                         #color='blue', width=2, key='temperature')
+
+                self.mDisplay.updateGraph()
 
                 self.storeValues(self.timeX[-1], self.sensValue[-1])
 
@@ -150,7 +152,7 @@ class mainWindow(object):
                 self.window.Element('_output').Update(values['output'])
                 ########################################################################
 
-                self.mDisplay.DrawLevelMarker( values['output'], key='tempSet' )
+                self.mDisplay.DrawLevelMarker( values['output'], key='temperature' )
 
                 # In case, a change was missed, repeat report current value
                 if ( self.oldValues['temp'] != int(values['output']) ):
@@ -255,7 +257,7 @@ class mainWindow(object):
         elif ( '_show' == event ):
             self.mDisplay.RestoreLine(self.timeX, self.sensValue, 'temperature')
         elif ( '_hide' == event ):
-            self.mDisplay.DeleteLine('temperature')
+            self.mDisplay.HideDataset('temperature')
         else:
             print(event)
 
