@@ -20,19 +20,22 @@ class mainDisplay(object):
     dataStreams = dict()
     markers = dict()
 
-    def __init__(self, width, height, timePtr, timespan=100, background_color=None):
+    def __init__(self, width, height, timePtr, timeSpan=100, background_color=None):
         """
         timespan: displayed timewindow
         xMin, xMax = xScale
         """
         self.gridConfig = {'xStepCnt':0, 'yStepCnt':0}
-        self.bordersize = 40
-        self.displayFieldSize = 1000
-        self.right_border = timespan
-        self.displaySize = (self.displayFieldSize + self.bordersize, self.displayFieldSize + self.bordersize)
-        #self.labelGraphLeft = sg.Graph((width/20,height), (0,-self.bordersize), (self.displaySize[0]/20,self.displaySize[1]), background_color, key='labelDisplayLeft')
-        self.graph = sg.Graph((width,height), (-self.bordersize,-self.bordersize), self.displaySize, background_color, key='mDisplay1')
-        self.timeScale = self.displayFieldSize / timespan
+        self.bordersize = 5
+        self.xLimit  = 100
+        self.yLimit = 100
+        labelFraction = 10
+        self.labelWindowWidth = 10#self.xLimit/labelFraction
+        self.right_border = timeSpan
+        self.timeScale = self.xLimit / timeSpan
+        self.labelGraphLeft = sg.Graph((width/labelFraction,height), (self.labelWindowWidth,-self.bordersize), (0,self.yLimit+self.bordersize), background_color, pad=(0,0), key='labelDisplayLeft')
+        self.labelGraphRight= sg.Graph((width/labelFraction,height), (0,-self.bordersize), (self.labelWindowWidth,self.yLimit+self.bordersize), background_color, pad=(0,0), key='labelDisplayRight')
+        self.graph = sg.Graph((width,height), (-2,-self.bordersize), (self.xLimit+2, self.yLimit+self.bordersize), background_color, pad=(0,0), key='mDisplay1')
         self.timePtr = timePtr
 
     def AddDataStream(self, timeDataPtr, yDataPtr, yScale, key, label=None):
@@ -45,7 +48,7 @@ class mainDisplay(object):
             tmp = yMax
             yMax = yMin
             yMin = tmp
-        valueScale = self.displayFieldSize / (yMax-yMin)
+        valueScale = self.yLimit / (yMax-yMin)
         self.dataStreams[key] = { 'timeDataPtr':timeDataPtr,
                                   'valuePtr':   yDataPtr,
                                   'valueScale': valueScale,
@@ -60,23 +63,21 @@ class mainDisplay(object):
         self.UpdateGridLabel(yMin, yMax, valueScale, label=label)
 
     def UpdateGridLabel(self, yMin, yMax, valueScale, label=None):
-        for j in range(self.gridConfig['forwardRender']):
-            if ( label != None ):
-                self.graph.DrawText(label,
-                    (self.right_drawed_border-self.delta+7*len(label)+self.displayFieldSize*(j-2),yMax/valueScale-20));
+        if ( label != None ):
+            self.labelGraphLeft.DrawText(label,(6,yMax/valueScale-5), angle=90);
 
-            for i in range(self.gridConfig['yStepCnt']+1):
-                valueLabel = i * self.gridConfig['heightStep'] / valueScale
-                # 0 should not be displayed here, as it already was at the start
-                if ( 0.01 > valueLabel ):
-                    continue
+        self.labelGraphLeft.DrawLine((0,0), (0,self.yLimit), color='grey', width=3)
 
-                if ( (valueLabel % 10) > 0.01 ):
-                    self.graph.DrawText("{:.2f}".format(valueLabel),
-                        (self.right_drawed_border-self.delta-20+self.displayFieldSize*(j-2),i*self.gridConfig['heightStep']+20));
-                else:
-                    self.graph.DrawText("{:d}".format(int(valueLabel)),
-                        (self.right_drawed_border-self.delta-20+self.displayFieldSize*(j-2),i*self.gridConfig['heightStep']+20));
+        for i in range(self.gridConfig['yStepCnt']+1):
+            valueLabel = i * self.gridConfig['yStepSize'] / valueScale
+            self.labelGraphLeft.DrawLine((1.5,i*self.gridConfig['yStepSize']), (0,i*self.gridConfig['yStepSize']), color='grey', width=1)
+
+            if ( (valueLabel % 10) > 0.01 ):
+                self.labelGraphLeft.DrawText("{:.2f}".format(valueLabel),
+                    (2,i*self.gridConfig['yStepSize']+2));
+            else:
+                self.labelGraphLeft.DrawText("{:d}".format(int(valueLabel)),
+                    (2,i*self.gridConfig['yStepSize']+2));
 
     def DrawGrid(self, xStepCnt=10, yStepCnt=10):
         self.gridConfig['xStepCnt'] = xStepCnt
@@ -85,29 +86,27 @@ class mainDisplay(object):
         self.gridConfig['forwardRender'] = 1 + 1;
 
         startX = self.right_drawed_border
-        if ( 0 == startX ):
-            self.graph.DrawText("0", (-20,-20));
 
-        self.right_drawed_border += self.gridConfig['forwardRender']*self.displayFieldSize
+        self.right_drawed_border += self.gridConfig['forwardRender']*self.xLimit
 
-        self.gridConfig['widthStep']  = int(self.displayFieldSize/xStepCnt)
-        self.gridConfig['heightStep'] = int(self.displayFieldSize/yStepCnt)
+        self.gridConfig['xStepSize']  = int(self.xLimit/xStepCnt)
+        self.gridConfig['yStepSize'] = int(self.yLimit/yStepCnt)
 
         self.DrawLine((startX-self.delta,0), (self.right_drawed_border-self.delta,0), color='grey', width='3');
 
-        for i in range(startX+self.gridConfig['widthStep'],self.right_drawed_border+1, self.gridConfig['widthStep']):
-            self.DrawLine((i-self.delta,0), (i-self.delta,self.displayFieldSize), color='grey', width='1');
+        for i in range(startX,self.right_drawed_border+1, self.gridConfig['xStepSize']):
+            self.DrawLine((i-self.delta,0), (i-self.delta,self.yLimit), color='grey', width='1');
             timeLabel = i/self.timeScale
             if ( (timeLabel % 10) > 0.001 ):
-                self.graph.DrawText("{:.2f}s".format(timeLabel), (i-self.delta,-20));
+                self.graph.DrawText("{:.2f}s".format(timeLabel), (i-self.delta,-2));
             else:
-                self.graph.DrawText("{:d}s".format(int(timeLabel)), (i-self.delta,-20));
+                self.graph.DrawText("{:d}s".format(int(timeLabel)), (i-self.delta,-2));
 
         for i in range(yStepCnt):
-            currentPosition = (i+1) * self.gridConfig['heightStep']
+            currentPosition = (i+1) * self.gridConfig['yStepSize']
             self.DrawLine((startX-self.delta,currentPosition), (self.right_drawed_border-self.delta,currentPosition), color='grey', width='1');
-            for j in range(self.gridConfig['forwardRender']+1):
-                self.DrawLine((startX-self.delta+j*self.displayFieldSize,0), (startX-self.delta+j*self.displayFieldSize,self.displayFieldSize), color='grey', width='3');
+
+        self.RefreshLevelMarker()
 
     def drawFullCanvas(self, graph):
         self.graph.Erase()
@@ -116,8 +115,8 @@ class mainDisplay(object):
         for i in range(self.ndx):
             #graph.DrawLine( (self.timeX[self.ndx-i]-self.timeX[self.ndx-self.range], self.sensValue[self.ndx-i]*2+15),
                             #(self.timeX[self.ndx+1-i]-self.timeX[self.ndx-self.range], self.sensValue[self.ndx+1-i]*2+15),
-            self.graph.DrawLine( (self.timeX[i], self.sensValue[i]*2+15),
-                            (self.timeX[i+1], self.sensValue[i+1]*2+15),
+            self.graph.DrawLine( (self.timeX[i], self.sensValue[i]*2+2),
+                            (self.timeX[i+1], self.sensValue[i+1]*2+2),
                              color='blue', width=2)
 
     def HideDataset(self, key=None):
@@ -149,8 +148,6 @@ class mainDisplay(object):
             print("DeleteLine: key doesnt belong to dataStream.")
             return;
 
-        #print(len(self.dataStreams[key]['valuePtr']))
-        #print(self.dataStreams[key]['lineIDs'])
         for id in self.dataStreams[key]['lineIDs']:
             self.graph.DeleteFigure(id)
         self.dataStreams[key]['lineIDs'] = []
@@ -176,6 +173,18 @@ class mainDisplay(object):
         #else:
             #self.graph.DrawLine(pointFrom, pointTo, color, width)
 
+    def RefreshLevelMarker(self):
+        for key in self.dataStreams:
+            if 'marker' in self.dataStreams[key]:
+                self.graph.DeleteFigure(self.dataStreams[key]['marker']['id'])
+                self.dataStreams[key]['marker']['id'] = None
+
+                self.dataStreams[key]['marker']['id'] = self.graph.DrawLine(
+                    (-self.delta, self.dataStreams[key]['marker']['value']),
+                    (self.right_drawed_border, self.dataStreams[key]['marker']['value']),
+                    self.dataStreams[key]['marker']['color'],
+                    self.dataStreams[key]['marker']['width'] )
+
     def DrawLevelMarker(self, level, key=None, color='black', width=1):
         if ( key == None ):
             print("DrawLevelMarker: missing key");
@@ -190,10 +199,13 @@ class mainDisplay(object):
             if ( self.dataStreams[key]['marker']['value'] == level ):
                 return 0;
             self.graph.DeleteFigure(self.dataStreams[key]['marker']['id'])
+            self.dataStreams[key]['marker']['id'] = None
         else:
             self.dataStreams[key]['marker'] = dict()
 
         self.dataStreams[key]['marker']['value'] = level
+        self.dataStreams[key]['marker']['color'] = color
+        self.dataStreams[key]['marker']['width'] = width
         self.dataStreams[key]['marker']['id'] = self.graph.DrawLine(
             (-self.delta,level), (self.right_drawed_border, level), color, width )
 
@@ -205,8 +217,8 @@ class mainDisplay(object):
             if ( stream['Visible'] ):
                 while ( stream['lastDrawnIndex'] < (len(stream['valuePtr'])-1) ):
                     #print(stream['lastDrawnIndex'])
-                    self.DrawLine2( (stream['timeDataPtr'][stream['lastDrawnIndex']]-self.delta, stream['valuePtr'][stream['lastDrawnIndex']]),
-                                    (stream['timeDataPtr'][stream['lastDrawnIndex']+1]-self.delta, stream['valuePtr'][stream['lastDrawnIndex']+1]),
+                    self.DrawLine2( (stream['timeDataPtr'][stream['lastDrawnIndex']]*self.timeScale-self.delta, stream['valuePtr'][stream['lastDrawnIndex']]),
+                                    (stream['timeDataPtr'][stream['lastDrawnIndex']+1]*self.timeScale-self.delta, stream['valuePtr'][stream['lastDrawnIndex']+1]),
                                      color='blue', width=2, key=key)
 
                     stream['lastDrawnIndex'] += 1
@@ -223,7 +235,7 @@ class mainDisplay(object):
             self.right_border += distanceToBorder
 
         # if Grid is drawn only one display length in advance, draw it further
-        if ( (self.right_drawed_border - self.displayFieldSize) < new_x_value*self.timeScale ):
+        if ( (self.right_drawed_border - self.xLimit) < new_x_value*self.timeScale ):
             self.DrawGrid();
 
     def mvCanvas(self, direction):
@@ -232,16 +244,16 @@ class mainDisplay(object):
             if ( 0 <= (self.delta-threshold) ):
                 self.graph.Move(threshold*self.timeScale, 0)
                 self.delta -= threshold
-                self.right_border -= threshold*self.timeScale
+                self.right_border -= threshold
             else:
                 self.graph.Move(self.delta, 0)
                 self.delta = 0
-                self.right_border = self.displayFieldSize
+                self.right_border = self.xLimit
         elif ( 'right' == direction ):
-            if ( self.right_drawed_border >= (self.right_border + threshold*self.timeScale) ):
+            if ( self.right_drawed_border >= (self.right_border + threshold)*self.timeScale ):
                 self.graph.Move(-threshold*self.timeScale, 0)
                 self.delta += threshold
-                self.right_border += threshold*self.timeScale
+                self.right_border += threshold
 
         # If moved outside of the graph, deactivate automovement
         if ( self.right_border < self.timePtr[-1] ):

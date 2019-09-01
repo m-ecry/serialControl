@@ -54,7 +54,9 @@ class mainWindow(object):
         colpadding = ((0,0),8)
 
         col1 = [ [ sg.Button(button_text="<", size=(1,30), key='mv_left'),
+                   self.mDisplay.labelGraphLeft,
                    self.mDisplay.graph,
+                   self.mDisplay.labelGraphRight,
                    sg.Button(button_text=">", size=(1,30), key='mv_right') ], ]
 
         self.enableDoubleclickButtons();
@@ -187,7 +189,6 @@ class mainWindow(object):
     def doubleclickAction(self, sender):
         if ( self.doubleclickTimer ):
             timeDiff = int(round(time.time() * 1000)) - self.doubleclickTimer
-            print(timeDiff)
             if ( timeDiff < self.doubleclickThreshold ):
                 self.buttonSpecialMode = sender
             else:
