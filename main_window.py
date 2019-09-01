@@ -6,6 +6,7 @@ Created on Sat Aug  3 15:18:24 2019
 @author: omr-w
 """
 
+import traceback
 import PySimpleGUI as sg
 from serial_comm import serial_communication as sc
 import serial_utils as sutils
@@ -45,7 +46,7 @@ class mainWindow(object):
 
 
     def setup(self):
-        self.mDisplay = md(100,100)
+        self.mDisplay = md(100,100, self.timeX)
 
         # heigth in rows, witdth in pixels
         size_progressBar = (50,32)
@@ -56,8 +57,11 @@ class mainWindow(object):
                    self.mDisplay.graph,
                    sg.Button(button_text=">", size=(1,30), key='mv_right') ], ]
 
+        self.enableDoubleclickButtons();
         col2 = [ [ sg.Text("Cur", size=(4,1), pad=padding), sg.Text(' 0.00', key='_sensor', size=(5,1), pad=padding), ],
                  [ sg.Text("Dest", size=(4,1), pad=padding), sg.Text('0.00', key='_output', size=(5,1), pad=padding) ],
+                 [ sg.Button('Show', key='_show'), ],
+                 [ sg.Button('Hide', key='_hide'), ],
                    ]
 
         col3 = [ [ sg.Text("Set", size=(5,1), justification='right'), ],
@@ -127,20 +131,17 @@ class mainWindow(object):
 
     def evaluateReceivedValues(self, values):
         if ( 0 != values ):
-            #print(values);
             try:
-                currentMS = int(round(time.time() * 1000))
-                self.timeX.append(float((currentMS - self.startTime)/100))
-
                 tmp = float(values['sensor'] * 100 / 4096.0); # 12-bit adc-values
-                #print (tmp)
                 self.sensValue.append( tmp )
 
+                currentMS = int(round(time.time() * 1000))
+                self.timeX.append(float((currentMS - self.startTime)/100))
                 self.mDisplay.fitCanvas(self.timeX[-1])
 
-                self.mDisplay.graph.DrawLine( (self.timeX[-2]-self.mDisplay.delta, self.sensValue[-2]),
-                                     (self.timeX[-1]-self.mDisplay.delta, self.sensValue[-1]),
-                                      color='blue', width=2)
+                self.mDisplay.DrawLine( (self.timeX[-2]-self.mDisplay.delta, self.sensValue[-2]),
+                                        (self.timeX[-1]-self.mDisplay.delta, self.sensValue[-1]),
+                                         color='blue', width=2, key='temperature')
 
                 self.storeValues(self.timeX[-1], self.sensValue[-1])
 
@@ -149,24 +150,15 @@ class mainWindow(object):
                 self.window.Element('_output').Update(values['output'])
                 ########################################################################
 
-                if ( not hasattr(self,'lastReceivedValues') ):
-                    self.lastReceivedValues = values
+                self.mDisplay.DrawLevelMarker( values['output'], key='tempSet' )
 
-                if ( self.lastReceivedValues['output'] != values['output'] ):
-                    if ( hasattr(self, 'line') ):
-                        self.graph.DeleteFigure(self.line)
-
-                    self.line = self.graph.DrawLine( (0, values['output']),
-                                         (self.right_drawed_border, values['output']),
-                                         color='red', width=1)
-
-                self.lastReceivedValues = values
                 # In case, a change was missed, repeat report current value
                 if ( self.oldValues['temp'] != int(values['output']) ):
                     self.serialComm.writeToPort(self.oldValues['temp']);
 
             except Exception as e:
                 print("Value", e, "could not be found")
+                print(traceback.format_exc())
                 print("Complete value list:", values)
 
     def check_if_value_changed(self, values):
@@ -185,9 +177,29 @@ class mainWindow(object):
 
         self.oldValues = values
 
+    def enableDoubleclickButtons(self):
+        self.doubleclickThreshold = 250
+        self.doubleclickTimer = 0
+        self.buttonSpecialMode = ''
+
+    def doubleclickAction(self, sender):
+        if ( self.doubleclickTimer ):
+            timeDiff = int(round(time.time() * 1000)) - self.doubleclickTimer
+            print(timeDiff)
+            if ( timeDiff < self.doubleclickThreshold ):
+                self.buttonSpecialMode = sender
+            else:
+                self.doubleclickTimer = int(round(time.time() * 1000))
+        else:
+            self.doubleclickTimer = int(round(time.time() * 1000))
+
     def processWindowInput(self, event, values):
         if ( event == '__TIMEOUT__' ):
             self.check_if_value_changed(values)
+            if ( 'mv_right' == self.buttonSpecialMode ):
+                self.mDisplay.mvCanvas('right');
+            elif ( 'mv_left' == self.buttonSpecialMode ):
+                self.mDisplay.mvCanvas('left');
             return 0;
         #else:
             #print(event)
@@ -208,9 +220,18 @@ class mainWindow(object):
                     self.showWarning('Invalid temperature given!', str(e));
 
         elif ( event == 'mv_right' ):
-            self.mDisplay.mvCanvas(0);
+            if ( None == self.buttonSpecialMode ):
+                self.doubleclickAction('mv_right')
+                self.mDisplay.mvCanvas('right');
+            else:
+                self.buttonSpecialMode = None
+
         elif ( event == 'mv_left' ):
-            self.mDisplay.mvCanvas(1);
+            if ( None == self.buttonSpecialMode ):
+                self.doubleclickAction('mv_left')
+                self.mDisplay.mvCanvas('left');
+            else:
+                self.buttonSpecialMode = None
         elif ( event == 'Change Output File To...'):
             newFile = sg.PopupGetFile("Choose file to store the data into.", title='New savefile', save_as=True, file_types=(('csv file', '*.csv'),), no_window=True)
             if ( newFile != None ):
@@ -231,6 +252,13 @@ class mainWindow(object):
                     if ( event == port ):
                         print(port[:port.find(" - ")])
                         self.startSerial(event[:event.find(" - ")], 9600)
+        elif ( '_show' == event ):
+            self.mDisplay.RestoreLine(self.timeX, self.sensValue, 'temperature')
+        elif ( '_hide' == event ):
+            self.mDisplay.DeleteLine('temperature')
+        else:
+            print(event)
+
 
         self.oldValues = values
 

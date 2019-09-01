@@ -16,13 +16,15 @@ class mainDisplay(object):
     right_drawed_border = 0
     canvasAutoMove = 1
     range = 496;
+    ids = dict()
 
-    def __init__(self, width, height):
+    def __init__(self, width, height, xDataPtr):
         self.width = width
         self.height = height
         self.right_border = self.width
         self.bordersize = 4
         self.graph = sg.Graph((640,512), (-self.bordersize,-self.bordersize), (self.width+self.bordersize,self.height+self.bordersize), background_color=None, key='display')
+        self.xDataPtr = xDataPtr
 
     def drawGrid(self):
         startX = self.right_drawed_border
@@ -49,15 +51,56 @@ class mainDisplay(object):
 
 
     def drawFullCanvas(self, graph):
-        graph.Erase()
+        self.graph.Erase()
         self.drawGrid()
         #self.graph.Move((self.timeX[self.ndx] - self.timeX[self.ndx+1]), 0)
         for i in range(self.ndx):
             #graph.DrawLine( (self.timeX[self.ndx-i]-self.timeX[self.ndx-self.range], self.sensValue[self.ndx-i]*2+15),
                             #(self.timeX[self.ndx+1-i]-self.timeX[self.ndx-self.range], self.sensValue[self.ndx+1-i]*2+15),
-            graph.DrawLine( (self.timeX[i], self.sensValue[i]*2+15),
+            self.graph.DrawLine( (self.timeX[i], self.sensValue[i]*2+15),
                             (self.timeX[i+1], self.sensValue[i+1]*2+15),
                              color='blue', width=2)
+
+    def RestoreLine(self, dataX, dataY, key=None):
+        if ( len(dataX) == len(dataY) ):
+            for i in range(len(dataX)-2):
+                self.DrawLine( (dataX[i], dataY[i]), (dataX[i+1], dataY[i+1]), color='blue', width=2, key='temperature')
+
+
+    def DeleteLine(self, key=None):
+        if key is None:
+            print(__FUNC__, "No key was given.")
+            return;
+        elif key not in self.ids:
+            print(__FUNC__, "key has no values.")
+            return;
+
+        for id in self.ids[key]:
+            self.graph.DeleteFigure(id)
+
+    def DrawLine(self, pointFrom, pointTo, color='black', width=1, key=None):
+        if key not in self.ids:
+            self.ids[key] = []
+
+        if ( key is not None ):
+            self.ids[key].append(self.graph.DrawLine(pointFrom, pointTo, color, width))
+        else:
+            self.graph.DrawLine(pointFrom, pointTo, color, width)
+
+    def DrawLevelMarker(self, level, key=None, color='black', width=1):
+        if ( key == None ):
+            print(__FUNC__, "missing key");
+            return -1
+
+        if ( key in self.ids ):
+            #Only do something, when the marker is different
+            if ( self.ids[key] == level ):
+                return 0;
+            self.graph.DeleteFigure(self.ids[key])
+
+        self.ids[key] = self.graph.DrawLine(
+            (0,level), (self.right_drawed_border, level), color, width )
+
 
     def fitCanvas(self, new_x_value):
         distanceToBorder = int((new_x_value+1) - self.right_border)
@@ -71,21 +114,25 @@ class mainDisplay(object):
         if ( (self.right_drawed_border - self.width) < new_x_value ):
             self.drawGrid();
 
-    def mvCanvas(self, left_direction):
-        threshold = 20
-        if ( left_direction ):
+    def mvCanvas(self, direction):
+        threshold = 5
+        if ( 'left' == direction ):
             if ( 0 <= (self.delta-threshold) ):
-                self.delta -= threshold
                 self.graph.Move(threshold, 0)
+                self.delta -= threshold
                 self.right_border -= threshold
-        else:
+            else:
+                self.graph.Move(self.delta, 0)
+                self.delta = 0
+                self.right_border = self.width
+        elif ( 'right' == direction ):
             if ( self.right_drawed_border >= (self.right_border + threshold) ):
-                self.delta += threshold
                 self.graph.Move(-threshold, 0)
+                self.delta += threshold
                 self.right_border += threshold
 
         # If moved outside of the graph, deactivate automovement
-        if ( self.right_border < self.timeX[-1] ):
+        if ( self.right_border < self.xDataPtr[-1] ):
             self.canvasAutoMove = 0;
         else:
             self.canvasAutoMove = 1;
