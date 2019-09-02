@@ -29,16 +29,15 @@ class mainDisplay(object):
         self.bordersize = 5
         self.xLimit  = 100
         self.yLimit = 100
-        labelFraction = 10
-        self.labelWindowWidth = 10#self.xLimit/labelFraction
+        self.labelWindowWidth = 10
         self.right_border = timeSpan
         self.timeScale = self.xLimit / timeSpan
-        self.labelGraphLeft = sg.Graph((width/labelFraction,height), (self.labelWindowWidth,-self.bordersize), (0,self.yLimit+self.bordersize), background_color, pad=(0,0), key='labelDisplayLeft')
-        self.labelGraphRight= sg.Graph((width/labelFraction,height), (0,-self.bordersize), (self.labelWindowWidth,self.yLimit+self.bordersize), background_color, pad=(0,0), key='labelDisplayRight')
+        self.labelGraphLeft = sg.Graph((64,height), (self.labelWindowWidth,-self.bordersize), (0,self.yLimit+self.bordersize), background_color, pad=(0,0), key='labelDisplayLeft')
+        self.labelGraphRight= sg.Graph((64,height), (-1,-self.bordersize), (self.labelWindowWidth-1,self.yLimit+self.bordersize), background_color, pad=(0,0), key='labelDisplayRight')
         self.graph = sg.Graph((width,height), (-2,-self.bordersize), (self.xLimit+2, self.yLimit+self.bordersize), background_color, pad=(0,0), key='mDisplay1')
         self.timePtr = timePtr
 
-    def AddDataStream(self, timeDataPtr, yDataPtr, yScale, key, label=None):
+    def AddDataStream(self, timeDataPtr, yDataPtr, yScale, key, color='blue', line_width=2, label=None, yAxis='left'):
         if ( key in self.dataStreams ):
             print("addDataStream: Key ", key, "already exists. Failed to create the datastream");
             return
@@ -49,34 +48,50 @@ class mainDisplay(object):
             yMax = yMin
             yMin = tmp
         valueScale = self.yLimit / (yMax-yMin)
-        self.dataStreams[key] = { 'timeDataPtr':timeDataPtr,
-                                  'valuePtr':   yDataPtr,
-                                  'valueScale': valueScale,
-                                  'yMin':       yMin,
-                                  'yMax':       yMax,
-                                  'Visible':    True,
-                                  'lineIDs':    [],
-                                  'lastDrawnIndex':0,
+        self.dataStreams[key] = { 'timeDataPtr':    timeDataPtr,
+                                  'valuePtr':       yDataPtr,
+                                  'valueScale':     valueScale,
+                                  'yMin':           yMin,
+                                  'yMax':           yMax,
+                                  'color':          color,
+                                  'lineWidth':      line_width,
+                                  'Visible':        True,
+                                  'lineIDs':        [],
+                                  'lastDrawnIndex': 0,
+                                  'yAxis':          yAxis,
+                                  'label':          label,
                                                                             }
 
         self.DrawGrid()
-        self.UpdateGridLabel(yMin, yMax, valueScale, label=label)
+        self.UpdateGridLabel(key)
 
-    def UpdateGridLabel(self, yMin, yMax, valueScale, label=None):
-        if ( label != None ):
-            self.labelGraphLeft.DrawText(label,(6,yMax/valueScale-5), angle=90);
+    def UpdateGridLabel(self, key):
+        labelGraph = None
+        stream = self.dataStreams[key]
+        if ( stream['yAxis'] == 'left' ):
+            labelGraph = self.labelGraphLeft
+        elif ( stream['yAxis'] == 'right' ):
+            labelGraph = self.labelGraphRight
+        else:
+            print("Invalid", stream['yAxis'], "axis given. Available is 'left' and 'right'.")
+            return -1
 
-        self.labelGraphLeft.DrawLine((0,0), (0,self.yLimit), color='grey', width=3)
+        if ( stream['label'] != None ):
+            labelGraph.DrawText(stream['label'],(6,self.yLimit/2), angle=90);
+
+        labelGraph.DrawRectangle((4.5,self.yLimit/2+8),(7.5,self.yLimit/2+14), fill_color=stream['color'], line_color='black')
+
+        labelGraph.DrawLine((0,0), (0,self.yLimit), color='grey', width=3)
 
         for i in range(self.gridConfig['yStepCnt']+1):
-            valueLabel = i * self.gridConfig['yStepSize'] / valueScale
-            self.labelGraphLeft.DrawLine((1.5,i*self.gridConfig['yStepSize']), (0,i*self.gridConfig['yStepSize']), color='grey', width=1)
+            valueLabel = i * self.gridConfig['yStepSize'] / stream['valueScale']
+            labelGraph.DrawLine((1.5,i*self.gridConfig['yStepSize']), (0,i*self.gridConfig['yStepSize']), color='grey', width=1)
 
-            if ( (valueLabel % 10) > 0.01 ):
-                self.labelGraphLeft.DrawText("{:.2f}".format(valueLabel),
+            if ( (valueLabel % 1) > 0.01 ):
+                labelGraph.DrawText("{:.2f}".format(valueLabel),
                     (2,i*self.gridConfig['yStepSize']+2));
             else:
-                self.labelGraphLeft.DrawText("{:d}".format(int(valueLabel)),
+                labelGraph.DrawText("{:d}".format(int(valueLabel)),
                     (2,i*self.gridConfig['yStepSize']+2));
 
     def DrawGrid(self, xStepCnt=10, yStepCnt=10):
@@ -108,17 +123,6 @@ class mainDisplay(object):
 
         self.RefreshLevelMarker()
 
-    def drawFullCanvas(self, graph):
-        self.graph.Erase()
-        self.drawGrid()
-        #self.graph.Move((self.timeX[self.ndx] - self.timeX[self.ndx+1]), 0)
-        for i in range(self.ndx):
-            #graph.DrawLine( (self.timeX[self.ndx-i]-self.timeX[self.ndx-self.range], self.sensValue[self.ndx-i]*2+15),
-                            #(self.timeX[self.ndx+1-i]-self.timeX[self.ndx-self.range], self.sensValue[self.ndx+1-i]*2+15),
-            self.graph.DrawLine( (self.timeX[i], self.sensValue[i]*2+2),
-                            (self.timeX[i+1], self.sensValue[i+1]*2+2),
-                             color='blue', width=2)
-
     def HideDataset(self, key=None):
         if ( key == None ):
             print("HideDataLine needs a key, abort")
@@ -138,7 +142,9 @@ class mainDisplay(object):
         stream = self.dataStreams[key]
         stream['Visible'] = True
         for i in range(len(stream['valuePtr'])-2):
-            self.DrawLine2( (stream['timeDataPtr'][i]-self.delta, stream['valuePtr'][i]), (stream['timeDataPtr'][i+1]-self.delta, stream['valuePtr'][i+1]), color='blue', width=2, key='temperature')
+            self.DrawLine2( (stream['timeDataPtr'][i]-self.delta, stream['valuePtr'][i]),
+                            (stream['timeDataPtr'][i+1]-self.delta, stream['valuePtr'][i+1]),
+                             color=stream['color'], width=stream['lineWidth'], key='temperature')
 
     def DeleteDataset(self, key=None):
         if key is None:
@@ -219,7 +225,7 @@ class mainDisplay(object):
                     #print(stream['lastDrawnIndex'])
                     self.DrawLine2( (stream['timeDataPtr'][stream['lastDrawnIndex']]*self.timeScale-self.delta, stream['valuePtr'][stream['lastDrawnIndex']]),
                                     (stream['timeDataPtr'][stream['lastDrawnIndex']+1]*self.timeScale-self.delta, stream['valuePtr'][stream['lastDrawnIndex']+1]),
-                                     color='blue', width=2, key=key)
+                                     color=stream['color'], width=stream['lineWidth'], key=key)
 
                     stream['lastDrawnIndex'] += 1
 

@@ -22,6 +22,7 @@ class mainWindow(object):
 
     timeX = [0]
     sensValue = [0]
+    sensValue2 = [0]
 
     def __init__(self, port, baudrate):
         self.filename = ".tmp.csv"
@@ -46,7 +47,7 @@ class mainWindow(object):
 
 
     def setup(self):
-        self.mDisplay = md(640,480, self.timeX)
+        self.mDisplay = md(800,640, self.timeX)
 
         # heigth in rows, witdth in pixels
         size_progressBar = (50,32)
@@ -82,7 +83,8 @@ class mainWindow(object):
         event, self.oldValues = self.window.Read(timeout=1)
         print(self.oldValues)
 
-        self.mDisplay.AddDataStream(self.timeX, self.sensValue, (0,100), 'temperature', label='T in °C');
+        self.mDisplay.AddDataStream(self.timeX, self.sensValue, (0,100), 'temperature', color='red', label='T in °C', yAxis='left');
+        self.mDisplay.AddDataStream(self.timeX, self.sensValue2, (0,50), 'humidity', label='rf in %', yAxis='right');
 
         self.startTime = int(round(time.time() * 1000));
 
@@ -137,24 +139,18 @@ class mainWindow(object):
             try:
                 tmp = float(values['sensor'] * 100 / 4096.0); # 12-bit adc-values
                 self.sensValue.append( tmp )
+                self.sensValue2.append( tmp*2 )
 
                 currentMS = int(round(time.time() * 1000))
                 self.timeX.append(float((currentMS - self.startTime)/100))
-
-                #self.mDisplay.DrawLine( (self.timeX[-2]-self.mDisplay.delta, self.sensValue[-2]),
-                                        #(self.timeX[-1]-self.mDisplay.delta, self.sensValue[-1]),
-                                         #color='blue', width=2, key='temperature')
+                self.storeValues(self.timeX[-1], self.sensValue[-1])
 
                 self.mDisplay.updateGraph()
-
-                self.storeValues(self.timeX[-1], self.sensValue[-1])
+                self.mDisplay.DrawLevelMarker( values['output'], key='temperature' )
 
                 self.window.Element('_sensor').Update("%.2f"%tmp)
                 values['output'] = int(values['output'])
                 self.window.Element('_output').Update(values['output'])
-                ########################################################################
-
-                self.mDisplay.DrawLevelMarker( values['output'], key='temperature' )
 
                 # In case, a change was missed, repeat report current value
                 if ( self.oldValues['temp'] != int(values['output']) ):
