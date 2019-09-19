@@ -86,6 +86,8 @@ class serial_communication(object):
 
     def writeToPort(self, input):
         checksum = 60; #offset for char conversion of checksum above '#' and ';'
+        #Convert to int. Should already be int, but sometimes it's float..
+        input = int(input)
         tmp = input
 
         while ( tmp > 0 ):
