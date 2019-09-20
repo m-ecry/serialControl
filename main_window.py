@@ -20,9 +20,7 @@ from main_display import mainDisplay as md
 class mainWindow(object):
     """ Main Window for the regulator """
 
-    timeX = [0]
-    sensValue = [0]
-    sensValue2 = [0]
+    dataStreams = { 'time': {'factor':(1000, 0), 'values': [0]} }
 
     def __init__(self, port, baudrate):
         self.filename = ".tmp.csv"
@@ -32,7 +30,6 @@ class mainWindow(object):
 
         with open(self.filename, 'w') as outfile:
             outfile.write("Time in s since start, InputValue\n");
-
 
         self.refresh_serial_port_list();
         self.setup();
@@ -87,6 +84,15 @@ class mainWindow(object):
         self.mDisplay.AddDataStream(self.timeX, self.sensValue2, (0,50), 'humidity', label='rf in %', yAxis='right');
 
         self.startTime = int(round(time.time() * 1000));
+
+    def add_serial_dataStream(self, id, factors, limits=(0,100), color='black', label='None', yAxis='left'):
+        if id not in self.dataStreams:
+            if ( type(factors) is type(tuple()) ):
+                self.dataStreams[id] = { 'factors': factors, 'values': [0] }
+                self.mDisplay.AddDataStream(self.dataStreams['time']['values'], self.dataStreams[id]['values'], limits, id, color=color, label=label, yAxis=yAxis);
+            else:
+                print("""factors need to be given in the form of a tuple with factors going up from x.
+                 Currently starting factor is constant, then linear, then square and so on.""")
 
     def startSerial(self, serialPort, baudrate):
         try:
